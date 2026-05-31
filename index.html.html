@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5色百人一首 読み上げアプリ</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+    background: #1a1a2e;
+    color: #eee;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+  h1 {
+    font-size: 1.6rem;
+    margin-bottom: 20px;
+    color: #f0e0b0;
+    letter-spacing: 0.2em;
+  }
+
+  /* 色選択 */
+  .color-section { margin-bottom: 16px; width: 100%; max-width: 700px; }
+  .color-section h2 { font-size: 0.9rem; color: #aaa; margin-bottom: 8px; letter-spacing: 0.1em; }
+  .color-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .color-btn {
+    padding: 8px 18px;
+    border: 2px solid transparent;
+    border-radius: 24px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-family: inherit;
+    font-weight: bold;
+    transition: all 0.2s;
+    opacity: 0.7;
+  }
+  .color-btn:hover { opacity: 1; transform: scale(1.05); }
+  .color-btn.active { opacity: 1; border-color: #fff; transform: scale(1.05); }
+  .btn-blue   { background: #3a7bd5; color: #fff; }
+  .btn-pink   { background: #e8609a; color: #fff; }
+  .btn-yellow { background: #d4a017; color: #fff; }
+  .btn-green  { background: #3a9d5c; color: #fff; }
+  .btn-orange { background: #e8722a; color: #fff; }
+  .btn-all    { background: #6a5acd; color: #fff; }
+
+  /* モード選択 */
+  .mode-section { margin-bottom: 20px; width: 100%; max-width: 700px; }
+  .mode-section h2 { font-size: 0.9rem; color: #aaa; margin-bottom: 8px; letter-spacing: 0.1em; }
+  .mode-btns { display: flex; gap: 8px; }
+  .mode-btn {
+    padding: 8px 20px;
+    border: 2px solid #555;
+    border-radius: 24px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-family: inherit;
+    background: #2a2a4a;
+    color: #ccc;
+    transition: all 0.2s;
+  }
+  .mode-btn.active { border-color: #f0e0b0; color: #f0e0b0; background: #3a3a5a; }
+
+  /* 速度設定 */
+  .speed-section { margin-bottom: 20px; width: 100%; max-width: 700px; display: flex; align-items: center; gap: 12px; }
+  .speed-section label { font-size: 0.85rem; color: #aaa; white-space: nowrap; }
+  input[type=range] { flex: 1; accent-color: #f0e0b0; }
+  .speed-val { font-size: 0.85rem; color: #f0e0b0; min-width: 40px; }
+
+  @keyframes cardFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes shimmer {
+    0%,100% { text-shadow: 0 0 8px rgba(240,200,80,0.5); }
+    50%      { text-shadow: 0 0 20px rgba(240,200,80,1), 0 0 40px rgba(240,160,40,0.6); }
+  }
+
+  /* メイン表示エリア */
+  .card {
+    width: 100%;
+    max-width: 700px;
+    background: radial-gradient(ellipse at 50% 30%, #1e2a4a 0%, #0e1220 100%);
+    border-radius: 16px;
+    padding: 36px 32px 28px;
+    margin-bottom: 24px;
+    border: 1px solid #2a3a6a;
+    box-shadow: 0 0 40px rgba(60,80,160,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    animation: cardFadeIn 0.6s ease;
+  }
+  .poem-number {
+    position: absolute;
+    top: 12px;
+    left: 18px;
+    font-size: 0.8rem;
+    color: #666;
+  }
+  .poem-color-badge {
+    position: absolute;
+    top: 12px;
+    right: 18px;
+    font-size: 0.75rem;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-weight: bold;
+  }
+  .progress-info {
+    position: absolute;
+    bottom: 12px;
+    right: 18px;
+    font-size: 0.75rem;
+    color: #555;
+  }
+  .poet {
+    font-size: 0.82rem;
+    color: #8899bb;
+    margin-bottom: 20px;
+    letter-spacing: 0.15em;
+  }
+
+  /* 句ブロック */
+  .ku-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 10px;
+    width: 100%;
+  }
+  .ku-block.shimo-block { margin-bottom: 0; }
+  .phrase-span {
+    font-size: 1.45rem;
+    letter-spacing: 0.18em;
+    color: #4a5a7a;
+    transition: color 0.3s, text-shadow 0.3s;
+    line-height: 1.8;
+  }
+  .phrase-span.done  { color: #8890a8; }
+  .phrase-span.active {
+    color: #f5e090;
+    animation: shimmer 1.2s ease-in-out infinite;
+  }
+  .ku-divider {
+    width: 40px;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #334, transparent);
+    margin: 6px 0 10px;
+  }
+
+  .status-msg {
+    font-size: 0.78rem;
+    color: #556;
+    margin-top: 14px;
+    letter-spacing: 0.1em;
+  }
+  .idle-msg {
+    font-size: 1rem;
+    color: #556;
+    text-align: center;
+    line-height: 2.2;
+  }
+
+  /* コントロールボタン */
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .ctrl-btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-family: inherit;
+    font-weight: bold;
+    transition: all 0.15s;
+  }
+  .ctrl-btn:active { transform: scale(0.96); }
+  .btn-play  { background: #f0e0b0; color: #1a1a2e; min-width: 100px; }
+  .btn-prev  { background: #2a2a5a; color: #ccc; border: 1px solid #444; }
+  .btn-next  { background: #2a2a5a; color: #ccc; border: 1px solid #444; }
+  .btn-stop  { background: #5a2a2a; color: #fcc; border: 1px solid #844; }
+  .ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* 一覧 */
+  .list-section { width: 100%; max-width: 700px; }
+  .list-toggle {
+    background: none;
+    border: 1px solid #444;
+    color: #aaa;
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+  }
+  .poem-list { display: none; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+  .poem-list.open { display: flex; }
+  .list-item {
+    display: flex;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: #aaa;
+    transition: background 0.1s;
+    align-items: center;
+  }
+  .list-item:hover { background: #2a2a4a; color: #eee; }
+  .list-item.current { background: #2a3a6a; color: #f0e0b0; }
+  .list-item.done { color: #666; }
+  .list-num { min-width: 28px; color: #666; font-size: 0.75rem; }
+  .list-poet { min-width: 120px; }
+  .list-kami { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+
+<h1>五色百人一首　読み上げ</h1>
+
+<div class="color-section">
+  <h2>色を選ぶ</h2>
+  <div class="color-btns">
+    <button class="color-btn btn-blue  active" data-color="blue"  onclick="selectColor('blue')">青（1〜20番）</button>
+    <button class="color-btn btn-pink"          data-color="pink"  onclick="selectColor('pink')">桃（21〜40番）</button>
+    <button class="color-btn btn-yellow"        data-color="yellow" onclick="selectColor('yellow')">黄（41〜60番）</button>
+    <button class="color-btn btn-green"         data-color="green" onclick="selectColor('green')">緑（61〜80番）</button>
+    <button class="color-btn btn-orange"        data-color="orange" onclick="selectColor('orange')">橙（81〜100番）</button>
+    <button class="color-btn btn-all"           data-color="all"   onclick="selectColor('all')">全色（100首）</button>
+  </div>
+</div>
+
+<div class="mode-section">
+  <h2>読み上げ順</h2>
+  <div class="mode-btns">
+    <button class="mode-btn active" id="btn-seq" onclick="setMode('seq')">▶ 順番読み</button>
+    <button class="mode-btn"        id="btn-rnd" onclick="setMode('rnd')">🔀 ランダム読み</button>
+  </div>
+</div>
+
+<div class="speed-section">
+  <label>読み上げ速度</label>
+  <input type="range" id="speedRange" min="0.4" max="1.2" step="0.05" value="0.62" oninput="updateSpeed()">
+  <span class="speed-val" id="speedVal">0.62</span>
+</div>
+<div class="speed-section">
+  <label>句の間（秒）</label>
+  <input type="range" id="pauseRange" min="0.2" max="3.0" step="0.1" value="0.7" oninput="updatePause()">
+  <span class="speed-val" id="pauseVal">0.7s</span>
+  <label style="margin-left:16px;">
+    <input type="checkbox" id="jokaCheck" checked style="accent-color:#f0e0b0;">
+    <span style="font-size:0.85rem;color:#aaa;">序歌を読む</span>
+  </label>
+</div>
+
+<div class="card" id="mainCard">
+  <div class="idle-msg">色と読み方を選んで<br>▶ スタート を押してください</div>
+</div>
+
+<div class="controls">
+  <button class="ctrl-btn btn-prev" id="btnPrev" onclick="goPrev()" disabled>◀ 前の歌</button>
+  <button class="ctrl-btn btn-play" id="btnPlay" onclick="togglePlay()">▶ スタート</button>
+  <button class="ctrl-btn btn-next" id="btnNext" onclick="goNext()" disabled>次の歌 ▶</button>
+  <button class="ctrl-btn btn-stop" id="btnStop" onclick="stopAll()" disabled>■ 停止</button>
+</div>
+
+<div class="list-section">
+  <button class="list-toggle" onclick="toggleList()">選択中の歌一覧を表示 ▼</button>
+  <div class="poem-list" id="poemList"></div>
+</div>
+
+<script>
+// ===== 百人一首データ =====
+const POEMS = [
+  // 青 1-20
+  {n:1,  poet:"天智天皇",         kami:"秋の田の　かりほの庵の　苫をあらみ",          shimo:"わが衣手は　露にぬれつつ"},
+  {n:2,  poet:"持統天皇",         kami:"春すぎて　夏来にけらし　白妙の",              shimo:"衣ほすてふ　天の香具山"},
+  {n:3,  poet:"柿本人麻呂",       kami:"あしびきの　山鳥の尾の　しだり尾の",          shimo:"ながながし夜を　ひとりかも寝む"},
+  {n:4,  poet:"山部赤人",         kami:"田子の浦に　うちいでて見れば　白妙の",        shimo:"富士の高嶺に　雪は降りつつ"},
+  {n:5,  poet:"猿丸大夫",         kami:"奥山に　紅葉踏みわけ　鳴く鹿の",             shimo:"声聞くときぞ　秋はかなしき"},
+  {n:6,  poet:"中納言家持",       kami:"かささぎの　渡せる橋に　おく霜の",            shimo:"白きを見れば　夜ぞふけにける"},
+  {n:7,  poet:"阿倍仲麻呂",       kami:"天の原　ふりさけみれば　春日なる",            shimo:"三笠の山に　出でし月かも"},
+  {n:8,  poet:"喜撰法師",         kami:"わが庵は　都のたつみ　しかぞすむ",            shimo:"世をうぢ山と　人はいふなり"},
+  {n:9,  poet:"小野小町",         kami:"花の色は　うつりにけりな　いたづらに",        shimo:"わが身よにふる　ながめせしまに"},
+  {n:10, poet:"蝉丸",             kami:"これやこの　行くも帰るも　別れては",          shimo:"知るも知らぬも　逢坂の関"},
+  {n:11, poet:"参議篁",           kami:"わたのはら　八十島かけて　こぎいでぬと",      shimo:"人には告げよ　海人の釣船"},
+  {n:12, poet:"僧正遍昭",         kami:"あまつかぜ　雲のかよひぢ　吹きとぢよ",       shimo:"をとめの姿　しばしとどめむ"},
+  {n:13, poet:"陽成院",           kami:"つくばねの　峰よりおつる　みなの川",          shimo:"恋ぞつもりて　淵となりぬる"},
+  {n:14, poet:"河原左大臣",       kami:"みちのくの　しのぶもぢずり　誰ゆゑに",       shimo:"乱れそめにし　われならなくに"},
+  {n:15, poet:"光孝天皇",         kami:"君がため　春の野に出でて　若菜つむ",          shimo:"わが衣手に　雪は降りつつ"},
+  {n:16, poet:"中納言行平",       kami:"たちわかれ　いなばの山の　峰に生ふる",        shimo:"まつとし聞かば　今帰り来む"},
+  {n:17, poet:"在原業平朝臣",     kami:"ちはやぶる　神代もきかず　竜田川",            shimo:"からくれなゐに　水くくるとは"},
+  {n:18, poet:"藤原敏行朝臣",     kami:"住の江の　岸による浪　よるさへや",            shimo:"夢のかよひぢ　人目よくらむ"},
+  {n:19, poet:"伊勢",             kami:"難波潟　みじかきあしの　ふしの間も",          shimo:"逢はでこの世を　過ぐしてよとや"},
+  {n:20, poet:"元良親王",         kami:"わびぬれば　今はた同じ　難波なる",            shimo:"みをつくしても　あはむとぞ思ふ"},
+  // 桃 21-40
+  {n:21, poet:"素性法師",         kami:"今来むと　いひしばかりに　長月の",            shimo:"有明の月を　待ちいでつるかな"},
+  {n:22, poet:"文屋康秀",         kami:"吹くからに　秋の草木の　しをるれば",          shimo:"むべ山風を　嵐といふらむ"},
+  {n:23, poet:"大江千里",         kami:"月見れば　ちぢにものこそ　かなしけれ",        shimo:"わが身一つの　秋にはあらねど"},
+  {n:24, poet:"菅家",             kami:"このたびは　ぬさもとりあへず　手向山",        shimo:"紅葉の錦　神のまにまに"},
+  {n:25, poet:"三条右大臣",       kami:"名にし負はば　逢坂山の　さねかづら",          shimo:"人に知られで　くるよしもがな"},
+  {n:26, poet:"貞信公",           kami:"小倉山　峰のもみぢ葉　心あらば",              shimo:"今ひとたびの　みゆき待たなむ"},
+  {n:27, poet:"中納言兼輔",       kami:"みかの原　わきてながるる　泉川",              shimo:"いつ見きとてか　恋しかるらむ"},
+  {n:28, poet:"源宗于朝臣",       kami:"山里は　冬ぞさびしさ　まさりける",            shimo:"人目も草も　かれぬと思へば"},
+  {n:29, poet:"凡河内躬恒",       kami:"心あてに　折らばや折らむ　初霜の",            shimo:"置きまどはせる　白菊の花"},
+  {n:30, poet:"壬生忠岑",         kami:"有明の　つれなく見えし　別れより",            shimo:"暁ばかり　うきものはなし"},
+  {n:31, poet:"坂上是則",         kami:"朝ぼらけ　有明の月と　見るまでに",            shimo:"吉野の里に　降れる白雪"},
+  {n:32, poet:"春道列樹",         kami:"山川に　風のかけたる　しがらみは",            shimo:"流れもあへぬ　紅葉なりけり"},
+  {n:33, poet:"紀友則",           kami:"ひさかたの　光のどけき　春の日に",             shimo:"しづ心なく　花の散るらむ"},
+  {n:34, poet:"藤原興風",         kami:"誰をかも　知る人にせむ　高砂の",              shimo:"松も昔の　友ならなくに"},
+  {n:35, poet:"紀貫之",           kami:"人はいさ　心も知らず　ふるさとは",            shimo:"花ぞ昔の　香ににほひける"},
+  {n:36, poet:"清原深養父",       kami:"夏の夜は　まだ宵ながら　明けぬるを",          shimo:"雲のいづこに　月やどるらむ"},
+  {n:37, poet:"文屋朝康",         kami:"白露に　風の吹きしく　秋の野は",              shimo:"貫き留めぬ　玉ぞ散りける"},
+  {n:38, poet:"右近",             kami:"忘らるる　身をば思はず　誓ひてし",            shimo:"人の命の　惜しくもあるかな"},
+  {n:39, poet:"参議等",           kami:"浅茅生の　小野の篠原　しのぶれど",            shimo:"あまりてなどか　人の恋しき"},
+  {n:40, poet:"平兼盛",           kami:"忍ぶれど　色に出でにけり　わが恋は",          shimo:"ものや思ふと　人の問ふまで"},
+  // 黄 41-60
+  {n:41, poet:"壬生忠見",         kami:"恋すてふ　わが名はまだき　立ちにけり",        shimo:"人知れずこそ　思ひそめしか"},
+  {n:42, poet:"清原元輔",         kami:"契りきな　かたみに袖を　しぼりつつ",          shimo:"末の松山　浪越さじとは"},
+  {n:43, poet:"権中納言敦忠",     kami:"逢ひ見ての　のちの心に　くらぶれば",          shimo:"昔はものを　思はざりけり"},
+  {n:44, poet:"中納言朝忠",       kami:"逢ふことの　絶えてしなくは　なかなかに",      shimo:"人をも身をも　恨みざらまし"},
+  {n:45, poet:"謙徳公",           kami:"あはれとも　いふべき人は　思ほえで",          shimo:"身のいたづらに　なりぬべきかな"},
+  {n:46, poet:"曾禰好忠",         kami:"由良の門を　渡る舟人　かぢをたえ",            shimo:"ゆくへも知らぬ　恋の道かな"},
+  {n:47, poet:"恵慶法師",         kami:"八重葎　しげれる宿の　さびしきに",            shimo:"人こそ見えね　秋は来にけり"},
+  {n:48, poet:"源重之",           kami:"風をいたみ　岩うつ浪の　おのれのみ",          shimo:"砕けて物を　思ふころかな"},
+  {n:49, poet:"大中臣能宣朝臣",   kami:"みかきもり　衛士のたく火の　夜はもえ",       shimo:"昼は消えつつ　物をこそ思へ"},
+  {n:50, poet:"藤原義孝",         kami:"君がため　惜しからざりし　命さへ",            shimo:"長くもがなと　思ひけるかな"},
+  {n:51, poet:"藤原実方朝臣",     kami:"かくとだに　えやはいぶきの　さしも草",        shimo:"さしも知らじな　燃ゆる思ひを"},
+  {n:52, poet:"藤原道信朝臣",     kami:"明けぬれば　暮るるものとは　知りながら",      shimo:"なほうらめしき　朝ぼらけかな"},
+  {n:53, poet:"右大将道綱母",     kami:"なげきつつ　ひとり寝る夜の　明くる間は",      shimo:"いかに久しき　ものとかは知る"},
+  {n:54, poet:"儀同三司母",       kami:"忘れじの　ゆく末まではか たければ",           shimo:"今日を限りの　命ともがな"},
+  {n:55, poet:"大納言公任",       kami:"滝の音は　絶えて久しく　なりぬれど",          shimo:"名こそ流れて　なほ聞こえけれ"},
+  {n:56, poet:"和泉式部",         kami:"あらざらむ　この世のほかの　思ひ出に",        shimo:"今ひとたびの　逢ふこともがな"},
+  {n:57, poet:"紫式部",           kami:"めぐり逢ひて　見しやそれとも　わかぬ間に",    shimo:"雲がくれにし　夜半の月かな"},
+  {n:58, poet:"大弐三位",         kami:"有馬山　猪名の笹原　風吹けば",                shimo:"いでそよ人を　忘れやはする"},
+  {n:59, poet:"赤染衛門",         kami:"やすらはで　寝なましものを　さ夜ふけて",      shimo:"かたぶくまでの　月を見しかな"},
+  {n:60, poet:"小式部内侍",       kami:"大江山　いく野の道の　遠ければ",              shimo:"まだふみも見ず　天の橋立"},
+  // 緑 61-80
+  {n:61, poet:"伊勢大輔",         kami:"いにしへの　奈良の都の　八重桜",              shimo:"けふ九重に　匂ひぬるかな"},
+  {n:62, poet:"清少納言",         kami:"夜をこめて　鳥のそら音は　はかるとも",        shimo:"よに逢坂の　関はゆるさじ"},
+  {n:63, poet:"左京大夫道雅",     kami:"今はただ　思ひたえなむ　とばかりを",          shimo:"人づてならで　いふよしもがな"},
+  {n:64, poet:"権中納言定頼",     kami:"朝ぼらけ　宇治の川霧　たえだえに",            shimo:"あらはれわたる　瀬々の網代木"},
+  {n:65, poet:"相模",             kami:"恨みわび　ほさぬ袖だに　あるものを",          shimo:"恋に朽ちなむ　名こそをしけれ"},
+  {n:66, poet:"前大僧正行尊",     kami:"もろともに　あはれと思へ　山桜",              shimo:"花よりほかに　知る人もなし"},
+  {n:67, poet:"周防内侍",         kami:"春の夜の　夢ばかりなる　手枕に",              shimo:"かひなく立たむ　名こそをしけれ"},
+  {n:68, poet:"三条院",           kami:"心にも　あらでうき世に　ながらへば",          shimo:"恋しかるべき　夜半の月かな"},
+  {n:69, poet:"能因法師",         kami:"嵐吹く　三室の山の　もみぢ葉は",              shimo:"竜田の川の　錦なりけり"},
+  {n:70, poet:"良暹法師",         kami:"寂しさに　宿を立ちいでて　ながむれば",        shimo:"いづこも同じ　秋の夕暮れ"},
+  {n:71, poet:"大納言経信",       kami:"夕されば　門田の稲葉　おとづれて",            shimo:"あしのまろやに　秋風ぞ吹く"},
+  {n:72, poet:"祐子内親王家紀伊", kami:"音に聞く　高師の浜の　あだ浪は",              shimo:"かけじや袖の　濡れもこそすれ"},
+  {n:73, poet:"前中納言匡房",     kami:"高砂の　をのへの桜　咲きにけり",              shimo:"外山の霞　立たずもあらなむ"},
+  {n:74, poet:"源俊頼朝臣",       kami:"憂かりける　人を初瀬の　山おろしよ",          shimo:"はげしかれとは　祈らぬものを"},
+  {n:75, poet:"藤原基俊",         kami:"ちぎりおきし　させもが露を　命にて",          shimo:"あはれことしの　秋もいぬめり"},
+  {n:76, poet:"法性寺入道前関白太政大臣", kami:"わたの原　こぎいでてみれば　ひさかたの", shimo:"雲ゐにまがふ　沖つ白波"},
+  {n:77, poet:"崇徳院",           kami:"瀬をはやみ　岩にせかるる　滝川の",            shimo:"われても末に　逢はむとぞ思ふ"},
+  {n:78, poet:"源兼昌",           kami:"淡路島　かよふ千鳥の　鳴く声に",              shimo:"いく夜寝覚めぬ　須磨の関守"},
+  {n:79, poet:"左京大夫顕輔",     kami:"秋風に　たなびく雲の　絶え間より",            shimo:"もれいづる月の　影のさやけさ"},
+  {n:80, poet:"待賢門院堀河",     kami:"長からむ　心も知らず　黒髪の",                shimo:"乱れて今朝は　ものをこそ思へ"},
+  // 橙 81-100
+  {n:81, poet:"後徳大寺左大臣",   kami:"ほととぎす　鳴きつる方を　ながむれば",        shimo:"ただ有明の　月ぞ残れる"},
+  {n:82, poet:"道因法師",         kami:"思ひわび　さても命は　あるものを",            shimo:"憂きにたへぬは　涙なりけり"},
+  {n:83, poet:"皇太后宮大夫俊成", kami:"世の中よ　道こそなけれ　思ひいる",            shimo:"山の奥にも　鹿ぞ鳴くなる"},
+  {n:84, poet:"藤原清輔朝臣",     kami:"ながらへば　またこのごろや　しのばれむ",      shimo:"うしと見し世ぞ　今は恋しき"},
+  {n:85, poet:"俊恵法師",         kami:"夜もすがら　物思ふころは　明けやらで",        shimo:"閨のひまさへ　つれなかりけり"},
+  {n:86, poet:"西行法師",         kami:"なげけとて　月やはものを　思はする",          shimo:"かこち顔なる　わが涙かな"},
+  {n:87, poet:"寂蓮法師",         kami:"村雨の　露もまだひぬ　まきの葉に",            shimo:"霧たちのぼる　秋の夕暮れ"},
+  {n:88, poet:"皇嘉門院別当",     kami:"難波江の　葦のかりねの　ひとよゆゑ",          shimo:"みをつくしてや　恋わたるべき"},
+  {n:89, poet:"式子内親王",       kami:"玉の緒よ　絶えなば絶えね　ながらへば",        shimo:"忍ぶることの　よわりもぞする"},
+  {n:90, poet:"殷富門院大輔",     kami:"見せばやな　雄島のあまの　袖だにも",          shimo:"ぬれにぞぬれし　色はかはらず"},
+  {n:91, poet:"後京極摂政前太政大臣", kami:"きりぎりす　鳴くや霜夜の　さむしろに",  shimo:"衣かたしき　ひとりかも寝む"},
+  {n:92, poet:"二条院讃岐",       kami:"わが袖は　汐干に見えぬ　沖の石の",            shimo:"人こそ知らね　かわく間もなし"},
+  {n:93, poet:"鎌倉右大臣",       kami:"世の中は　常にもがもな　渚こぐ",              shimo:"あまの小舟の　つなでかなしも"},
+  {n:94, poet:"参議雅経",         kami:"み吉野の　山の秋風　小夜ふけて",              shimo:"ふるさと寒く　衣うつなり"},
+  {n:95, poet:"前大僧正慈円",     kami:"おほけなく　うき世の民に　おほふかな",        shimo:"わが立つ杣に　墨染の袖"},
+  {n:96, poet:"入道前太政大臣",   kami:"花さそふ　嵐の庭の　雪ならで",                shimo:"ふりゆくものは　わが身なりけり"},
+  {n:97, poet:"権中納言定家",     kami:"こぬ人を　まつほの浦の　夕なぎに",            shimo:"焼くや藻塩の　身もこがれつつ"},
+  {n:98, poet:"従二位家隆",       kami:"風そよぐ　ならの小川の　夕暮れは",            shimo:"みそぎぞ夏の　しるしなりける"},
+  {n:99, poet:"後鳥羽院",         kami:"人もをし　人もうらめし　あぢきなく",          shimo:"世を思ふゆゑに　もの思ふ身は"},
+  {n:100,poet:"順徳院",           kami:"ももしきや　古き軒端の　しのぶにも",          shimo:"なほあまりある　昔なりけり"},
+];
+
+const COLOR_INFO = {
+  blue:   { label:"青",  range:[1,20],   bg:"#3a7bd5", badge:"#3a7bd5" },
+  pink:   { label:"桃",  range:[21,40],  bg:"#e8609a", badge:"#e8609a" },
+  yellow: { label:"黄",  range:[41,60],  bg:"#d4a017", badge:"#d4a017" },
+  green:  { label:"緑",  range:[61,80],  bg:"#3a9d5c", badge:"#3a9d5c" },
+  orange: { label:"橙",  range:[81,100], bg:"#e8722a", badge:"#e8722a" },
+  all:    { label:"全",  range:[1,100],  bg:"#6a5acd", badge:"#6a5acd" },
+};
+
+function getColorFor(n) {
+  if (n <= 20)  return 'blue';
+  if (n <= 40)  return 'pink';
+  if (n <= 60)  return 'yellow';
+  if (n <= 80)  return 'green';
+  return 'orange';
+}
+
+let selectedColor = 'blue';
+let mode = 'seq';
+let queue = [];
+let queueIndex = 0;
+let doneSet = new Set();
+let isPlaying = false;
+let speed = 0.62;
+let innerPauseMs = 700;
+let currentUtterance = null;
+
+function selectColor(c) {
+  selectedColor = c;
+  document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-color="${c}"]`).classList.add('active');
+  stopAll();
+  buildQueue();
+  renderList();
+  renderIdleCard();
+}
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('btn-seq').classList.toggle('active', m === 'seq');
+  document.getElementById('btn-rnd').classList.toggle('active', m === 'rnd');
+  stopAll();
+  buildQueue();
+  renderList();
+  renderIdleCard();
+}
+
+function updateSpeed() {
+  speed = parseFloat(document.getElementById('speedRange').value);
+  document.getElementById('speedVal').textContent = speed.toFixed(2);
+}
+function updatePause() {
+  innerPauseMs = Math.round(parseFloat(document.getElementById('pauseRange').value) * 1000);
+  document.getElementById('pauseVal').textContent = (innerPauseMs / 1000).toFixed(1) + 's';
+}
+
+function buildQueue() {
+  const info = COLOR_INFO[selectedColor];
+  let filtered = POEMS.filter(p => p.n >= info.range[0] && p.n <= info.range[1]);
+  if (mode === 'rnd') {
+    filtered = shuffle([...filtered]);
+  }
+  queue = filtered;
+  queueIndex = 0;
+  doneSet = new Set();
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function renderIdleCard() {
+  document.getElementById('mainCard').innerHTML = `<div class="idle-msg">色と読み方を選んで<br>▶ スタート を押してください</div>`;
+}
+
+function renderCard(poem) {
+  const ci = COLOR_INFO[getColorFor(poem.n)];
+  const kamiPhrases = splitPhrases(poem.kami);
+  const shimoPhrases = splitPhrases(poem.shimo);
+
+  const kamiHTML = kamiPhrases.map((p, i) =>
+    `<span class="phrase-span" id="phrase-k-${i}">${p}</span>`).join('');
+  const shimoHTML = shimoPhrases.map((p, i) =>
+    `<span class="phrase-span" id="phrase-s-${i}">${p}</span>`).join('');
+
+  document.getElementById('mainCard').innerHTML = `
+    <span class="poem-number">${poem.n}番</span>
+    <span class="poem-color-badge" style="background:${ci.badge}">${ci.label}札</span>
+    <div class="poet">${poem.poet}</div>
+    <div class="ku-block" id="kamiBlock">${kamiHTML}</div>
+    <div class="ku-divider"></div>
+    <div class="ku-block shimo-block" id="shimoBlock">${shimoHTML}</div>
+    <div class="status-msg" id="statusMsg">読み上げ中...</div>
+    <span class="progress-info">${queueIndex + 1} / ${queue.length}</span>
+  `;
+}
+
+function setAllPhraseClass(prefix, count, cls) {
+  for (let i = 0; i < count; i++) {
+    const el = document.getElementById(`${prefix}-${i}`);
+    if (el) { el.className = 'phrase-span'; if (cls) el.classList.add(cls); }
+  }
+}
+
+function highlightKami() {}   // 句単位はspeakPhrasesで管理
+function highlightShimo() {}
+function clearHighlight() {
+  document.querySelectorAll('.phrase-span').forEach(el => {
+    el.className = 'phrase-span done';
+  });
+}
+
+function setStatus(msg) {
+  const el = document.getElementById('statusMsg');
+  if (el) el.textContent = msg;
+}
+
+// TTS: 1フレーズを読み上げる
+function speak(text, onEnd) {
+  if (currentUtterance) window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'ja-JP';
+  utter.rate = speed;
+  utter.pitch = 0.82;   // 低めで荘重な読み
+  utter.volume = 1.0;
+  utter.onend = onEnd;
+  utter.onerror = onEnd;
+  currentUtterance = utter;
+  window.speechSynthesis.speak(utter);
+}
+
+// フレーズを1つずつ読み（末尾に「、」で息継ぎ）＋ハイライト
+async function speakPhrases(phrases, idPrefix) {
+  for (let i = 0; i < phrases.length; i++) {
+    if (!isPlaying) return;
+    // 前のフレーズを「読了」スタイルに
+    if (idPrefix && i > 0) {
+      const prev = document.getElementById(`${idPrefix}-${i - 1}`);
+      if (prev) { prev.className = 'phrase-span done'; }
+    }
+    // 現在フレーズをアクティブに
+    if (idPrefix) {
+      const cur = document.getElementById(`${idPrefix}-${i}`);
+      if (cur) { cur.className = 'phrase-span active'; }
+    }
+    const isLast = i === phrases.length - 1;
+    const text = isLast ? phrases[i] : phrases[i] + '、';
+    await new Promise(r => speak(text, r));
+  }
+  // 最後のフレーズを読了に
+  if (idPrefix && phrases.length > 0) {
+    const last = document.getElementById(`${idPrefix}-${phrases.length - 1}`);
+    if (last) { last.className = 'phrase-span done'; }
+  }
+}
+
+// 「　」区切りでフレーズ分割
+function splitPhrases(text) {
+  return text.split('　').map(s => s.trim()).filter(Boolean);
+}
+
+function readPoem(poem) {
+  renderCard(poem);
+  updateListHighlight();
+  const pause = (ms) => new Promise(r => setTimeout(r, ms));
+
+  // 句内の間はスライダー連動、その他は比率で自動計算
+  const innerPause     = innerPauseMs;
+  const kamiShimoPause = innerPauseMs;
+  const repeatPause    = innerPauseMs * 1.6;
+  const nextPause      = innerPauseMs * 2.0;
+
+  const kamiPhrases = splitPhrases(poem.kami);
+  const shimoPhrases = splitPhrases(poem.shimo);
+
+  async function doRead() {
+    if (!isPlaying) return;
+
+    // 上の句
+    setStatus("上の句");
+    await speakPhrases(kamiPhrases, 'phrase-k');
+    if (!isPlaying) return;
+    await pause(kamiShimoPause);
+    if (!isPlaying) return;
+
+    // 下の句（1回目）
+    document.querySelectorAll('[id^="phrase-s-"]').forEach(el => el.className = 'phrase-span');
+    setStatus("下の句");
+    await speakPhrases(shimoPhrases, 'phrase-s');
+    if (!isPlaying) return;
+    await pause(repeatPause);
+    if (!isPlaying) return;
+
+    // 下の句（2回目）
+    document.querySelectorAll('[id^="phrase-s-"]').forEach(el => el.className = 'phrase-span');
+    setStatus("下の句（繰り返し）");
+    await speakPhrases(shimoPhrases, 'phrase-s');
+    if (!isPlaying) return;
+
+    clearHighlight();
+    doneSet.add(poem.n);
+    renderListItem(poem.n);
+    await pause(nextPause);
+    if (!isPlaying) return;
+    nextPoem();
+  }
+  doRead();
+}
+
+function nextPoem() {
+  if (!isPlaying) return;
+  queueIndex++;
+  if (queueIndex >= queue.length) {
+    // 全首終了
+    isPlaying = false;
+    clearHighlight();
+    document.getElementById('mainCard').innerHTML = `<div class="idle-msg">全ての歌を読み上げました！<br>お疲れ様でした。</div>`;
+    setPlayBtn(false);
+    document.getElementById('btnStop').disabled = true;
+    updateNavBtns();
+    return;
+  }
+  updateNavBtns();
+  readPoem(queue[queueIndex]);
+}
+
+function togglePlay() {
+  if (!isPlaying) {
+    startPlaying();
+  } else {
+    pausePlaying();
+  }
+}
+
+async function startPlaying() {
+  if (queue.length === 0) buildQueue();
+  if (queue.length === 0) return;
+  isPlaying = true;
+  setPlayBtn(true);
+  document.getElementById('btnStop').disabled = false;
+  updateNavBtns();
+  startAmbient();
+
+  // 序歌（最初の歌から始まる場合のみ）
+  const jokaCheck = document.getElementById('jokaCheck');
+  if (jokaCheck && jokaCheck.checked && queueIndex === 0) {
+    document.getElementById('mainCard').innerHTML = `
+      <div class="poet">序歌</div>
+      <div class="kami" style="color:#c8d8f0;">難波津に　咲くやこの花　冬ごもり</div>
+      <div class="shimo" style="color:#c8d8f0;">今は春べと　咲くやこの花</div>
+      <div class="status-msg">序歌を読んでいます...</div>
+    `;
+    const jokaKami = ['難波津に', '咲くやこの花', '冬ごもり'];
+    const jokaShimo = ['今は春べと', '咲くやこの花'];
+    await speakPhrases(jokaKami, null);
+    if (!isPlaying) return;
+    await new Promise(r => setTimeout(r, innerPauseMs * 2.2));
+    if (!isPlaying) return;
+    await speakPhrases(jokaShimo, null);
+    if (!isPlaying) return;
+    await new Promise(r => setTimeout(r, innerPauseMs * 2.5));
+    if (!isPlaying) return;
+  }
+
+  readPoem(queue[queueIndex]);
+}
+
+function pausePlaying() {
+  isPlaying = false;
+  window.speechSynthesis.cancel();
+  stopAmbient();
+  clearHighlight();
+  setStatus("一時停止中");
+  setPlayBtn(false);
+}
+
+function stopAll() {
+  isPlaying = false;
+  window.speechSynthesis.cancel();
+  stopAmbient();
+  currentUtterance = null;
+  document.getElementById('btnStop').disabled = true;
+  setPlayBtn(false);
+  updateNavBtns();
+}
+
+function goPrev() {
+  if (queueIndex <= 0) return;
+  stopAll();
+  queueIndex--;
+  renderCard(queue[queueIndex]);
+  setStatus("▶ スタートで読み上げ開始");
+  updateNavBtns();
+  updateListHighlight();
+}
+
+function goNext() {
+  if (queueIndex >= queue.length - 1) return;
+  stopAll();
+  queueIndex++;
+  renderCard(queue[queueIndex]);
+  setStatus("▶ スタートで読み上げ開始");
+  updateNavBtns();
+  updateListHighlight();
+}
+
+function setPlayBtn(playing) {
+  const btn = document.getElementById('btnPlay');
+  btn.textContent = playing ? '⏸ 一時停止' : '▶ スタート';
+}
+
+function updateNavBtns() {
+  document.getElementById('btnPrev').disabled = (queueIndex <= 0 || queue.length === 0);
+  document.getElementById('btnNext').disabled = (queueIndex >= queue.length - 1 || queue.length === 0);
+}
+
+// 一覧
+let listOpen = false;
+function toggleList() {
+  listOpen = !listOpen;
+  const el = document.getElementById('poemList');
+  el.classList.toggle('open', listOpen);
+  document.querySelector('.list-toggle').textContent = listOpen ? '選択中の歌一覧を非表示 ▲' : '選択中の歌一覧を表示 ▼';
+}
+
+function renderList() {
+  const el = document.getElementById('poemList');
+  el.innerHTML = '';
+  queue.forEach((poem, idx) => {
+    const div = document.createElement('div');
+    div.className = 'list-item' + (idx === queueIndex ? ' current' : '') + (doneSet.has(poem.n) ? ' done' : '');
+    div.id = `list-item-${poem.n}`;
+    div.innerHTML = `<span class="list-num">${poem.n}番</span><span class="list-poet">${poem.poet}</span><span class="list-kami">${poem.kami}</span>`;
+    div.onclick = () => jumpTo(idx);
+    el.appendChild(div);
+  });
+}
+
+function renderListItem(n) {
+  const el = document.getElementById(`list-item-${n}`);
+  if (el) el.classList.add('done');
+}
+
+function updateListHighlight() {
+  document.querySelectorAll('.list-item').forEach((el, idx) => {
+    el.classList.toggle('current', idx === queueIndex);
+  });
+  // スクロール
+  const cur = document.querySelector('.list-item.current');
+  if (cur) cur.scrollIntoView({ block: 'nearest' });
+}
+
+function jumpTo(idx) {
+  stopAll();
+  queueIndex = idx;
+  renderCard(queue[queueIndex]);
+  setStatus("▶ スタートで読み上げ開始");
+  updateNavBtns();
+  updateListHighlight();
+}
+
+// ===== 環境音（風音） =====
+let ambientCtx = null, ambientGain = null, ambientSource = null;
+
+function startAmbient() {
+  if (ambientCtx) return;
+  try {
+    ambientCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const rate = ambientCtx.sampleRate;
+    const buf  = ambientCtx.createBuffer(1, rate * 3, rate);
+    const data = buf.getChannelData(0);
+    // ブラウン雑音（風っぽい）
+    let last = 0;
+    for (let i = 0; i < data.length; i++) {
+      const white = Math.random() * 2 - 1;
+      last = (last + 0.02 * white) / 1.02;
+      data[i] = last * 12;
+    }
+    ambientSource = ambientCtx.createBufferSource();
+    ambientSource.buffer = buf;
+    ambientSource.loop = true;
+
+    const lpf = ambientCtx.createBiquadFilter();
+    lpf.type = 'lowpass';
+    lpf.frequency.value = 280;
+
+    ambientGain = ambientCtx.createGain();
+    ambientGain.gain.value = 0;
+
+    ambientSource.connect(lpf);
+    lpf.connect(ambientGain);
+    ambientGain.connect(ambientCtx.destination);
+    ambientSource.start();
+    ambientGain.gain.linearRampToValueAtTime(0.18, ambientCtx.currentTime + 2);
+  } catch(e) {}
+}
+
+function stopAmbient() {
+  if (!ambientCtx) return;
+  try {
+    ambientGain.gain.linearRampToValueAtTime(0, ambientCtx.currentTime + 1.5);
+    setTimeout(() => {
+      try { ambientSource.stop(); ambientCtx.close(); } catch(e) {}
+      ambientCtx = ambientSource = ambientGain = null;
+    }, 1600);
+  } catch(e) {}
+}
+
+// 初期化
+buildQueue();
+renderList();
+updateNavBtns();
+</script>
+</body>
+</html>
